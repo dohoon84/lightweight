@@ -1,5 +1,5 @@
 {
-  "name": "nest-metrics-cgroup",
+  "name": "lightweight",
   "version": "0.0.1",
   "description": "도커 컨테이너 내부 메트릭 정보를 수집하는 NestJS 애플리케이션",
   "author": "",
