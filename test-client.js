@@ -1,7 +1,7 @@
 const { io } = require('socket.io-client');
 
 // EC2 인스턴스의 퍼블릭 IP 또는 도메인을 사용
-const socket = io('http://your-ec2-public-ip:3001', {
+const socket = io('http://localhost:3001', {
   transports: ['websocket', 'polling'],
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,

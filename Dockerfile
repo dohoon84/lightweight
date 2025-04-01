@@ -13,7 +13,7 @@ RUN npm run build
 RUN npm run pkg
 
 # 실행 단계
-FROM alpine:latest
+FROM node:20-slim
 
 WORKDIR /app
 
