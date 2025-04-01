@@ -34,10 +34,10 @@ npm run pkg
 
 ```bash
 # 도커 이미지 빌드
-docker build -t nest-metrics-cgroup .
+docker build -t lightweight .
 
 # 도커 컨테이너 실행
-docker run -p 3000:3000 nest-metrics-cgroup
+docker run -p 3002:3002 lightweight
 ```
 
 ## 사용 방법

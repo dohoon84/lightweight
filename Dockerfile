@@ -18,13 +18,13 @@ FROM alpine:latest
 WORKDIR /app
 
 # pkg로 빌드된 단일 실행 파일 복사
-COPY --from=build /app/dist-pkg/nest-metrics-cgroup /app/nest-metrics-cgroup
+COPY --from=build /app/dist-pkg/lightweight /app/lightweight
 
 # 실행 권한 추가
-RUN chmod +x /app/nest-metrics-cgroup
+RUN chmod +x /app/lightweight
 
 # 포트 노출
 EXPOSE 3001
 
 # 실행
-CMD ["/app/nest-metrics-cgroup"] 
+CMD ["/app/lightweight"] 
