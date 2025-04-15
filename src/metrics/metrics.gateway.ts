@@ -52,7 +52,7 @@ export class MetricsGateway implements OnGatewayConnection, OnGatewayDisconnect 
     // 주기적으로 메트릭 수집 및 전송
     this.metricsInterval = setInterval(async () => {
       try {
-        const metrics = await this.metricsService.getContainerMetrics();
+        const metrics = await this.metricsService.getMetrics();
         this.server.emit('metrics', metrics);
       } catch (error) {
         this.logger.error(`Error collecting or sending metrics: ${error.message}`);

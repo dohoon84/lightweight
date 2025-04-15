@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Metrics</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+        h1 { color: #333; }
+        pre { background-color: #fff; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }
+        .status { margin-bottom: 10px; font-weight: bold; }
+        .connected { color: green; }
+        .disconnected { color: red; }
+        .error { color: orange; }
+    </style>
+</head>
+<body>
+    <h1>System Metrics Dashboard</h1>
+    <div id="status" class="status disconnected">Status: Disconnected</div>
+    <pre id="metrics-output">Connecting to server...</pre>
+
+    <!-- Include Socket.IO client library -->
+    <!-- You might need to serve this file locally or use a CDN -->
+    <!-- Example using CDN: -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script> 
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const outputDiv = document.getElementById('metrics-output');
+        const socket = io({ path: '/socket.io' }); // Connect to the default path on the same host/port
+
+        socket.on('connect', () => {
+            console.log('Connected to WebSocket server!');
+            statusDiv.textContent = 'Status: Connected';
+            statusDiv.className = 'status connected';
+            outputDiv.textContent = 'Waiting for metrics...';
+        });
+
+        socket.on('disconnect', (reason) => {
+            console.log(`Disconnected: ${reason}`);
+            statusDiv.textContent = `Status: Disconnected (${reason})`;
+            statusDiv.className = 'status disconnected';
+            outputDiv.textContent = 'Connection lost. Trying to reconnect...';
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Connection Error:', error);
+            statusDiv.textContent = 'Status: Connection Error';
+            statusDiv.className = 'status error';
+            outputDiv.textContent = `Could not connect to the server: ${error.message}`;
+        });
+
+        // Listen for the 'metrics' event
+        socket.on('metrics', (data) => {
+            console.log('Received metrics:', data);
+            // Display the raw JSON data prettily
+            outputDiv.textContent = JSON.stringify(data, null, 2);
+        });
+    </script>
+</body>
+</html> 
