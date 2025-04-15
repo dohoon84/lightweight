@@ -20,11 +20,14 @@ WORKDIR /app
 # pkg로 빌드된 단일 실행 파일 복사
 COPY --from=build /app/dist-pkg/lightweight /app/lightweight
 
+# public 디렉토리 복사 (정적 파일 제공용)
+COPY --from=build /app/public /app/public
+
 # 실행 권한 추가
 RUN chmod +x /app/lightweight
 
-# 포트 노출
-EXPOSE 3001
+# 포트 노출 (3002로 변경)
+EXPOSE 3002
 
 # 실행
 CMD ["/app/lightweight"] 
