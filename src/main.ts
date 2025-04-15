@@ -10,8 +10,10 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
   
-  app.useStaticAssets(join(__dirname, '..', 'public'));
+  // 정적 파일 서비스 설정
+  app.useStaticAssets(join(process.cwd(), 'public'));
 
+  // CORS 설정
   app.enableCors({
     origin: '*',
     methods: ['GET', 'POST'],
