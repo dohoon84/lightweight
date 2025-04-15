@@ -56,7 +56,9 @@ docker run -d \
   -p ${HOST_PORT}:${CONTAINER_PORT} \
   -e METRICS_TARGET=host \
   -e PORT=${CONTAINER_PORT} \
+  --cap-add SYS_PTRACE \
   -v /proc:/host/proc:ro \
+  -v /sys:/host/sys:ro \
   ${FULL_IMAGE_NAME}
 
 # 실행 확인
