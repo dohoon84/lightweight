@@ -1,0 +1,61 @@
+# Global Agent Configuration (전역 설정)
+[agent]
+  interval = "10s"  # 기본 데이터 수집 간격
+  round_interval = true
+  metric_batch_size = 1000
+  metric_buffer_limit = 10000
+  collection_jitter = "0s"
+  flush_interval = "10s" # 데이터 전송 간격
+  flush_jitter = "0s"
+  precision = ""
+  hostname = "" # 호스트 이름 자동 감지 (비워두면)
+  omit_hostname = false # 호스트 구분 태그 (즉, 수집한 서버의 호스트명이 자동추가 - 호스트별 메트릭 정보 필터링할때 유용하도록 함)
+# =============== Output Plugins =============== #
+# InfluxDB v2로 데이터 전송 설정
+[[outputs.influxdb_v2]]
+  ## InfluxDB 서버 URL (필수)
+  urls = ["http://172.31.2.43:8086"] # 실제 서버 주소로 변경
+
+  ## 인증 토큰 (필수)
+  token = "blocko1234" # 실제 토큰으로 변경
+
+  ## 대상 Organization (필수)
+  organization = "blocko" # 실제 조직 이름으로 변경
+
+  ## 대상 Bucket (필수)
+  bucket = "host-metrics" # 실제 버킷 이름으로 변경
+
+  ## (선택) 연결 타임아웃 등 추가 옵션
+  # timeout = "5s"
+
+# =============== Input Plugins =============== #
+
+# CPU 메트릭 수집 (기본적으로 많이 사용)
+[[inputs.cpu]]
+  ## 코어별 CPU 통계 수집 여부 (true = 개별 코어, false = 전체 평균)
+  percpu = true
+  ## 전체 CPU 통계 수집 여부 (true = 전체 평균, false = 미수집)
+  totalcpu = true
+  collect_cpu_time = true
+  report_active = true
+
+# 메모리 메트릭 수집
+[[inputs.mem]]
+  # 설정할 특정 옵션 없음 (기본값 사용)
+
+# 디스크 사용량 메트릭 수집
+[[inputs.disk]]
+  ## 특정 마운트 포인트 무시
+  # ignore_mount_points = ["/dev", "/proc", "/sys"]
+  ## 특정 파일 시스템 타입 무시
+  ignore_fs = ["tmpfs", "devtmpfs", "devfs", "iso9660", "overlay", "aufs", "squashfs"]
+
+# 네트워크 메트릭 수집
+[[inputs.net]]
+  ## 모니터링할 네트워크 인터페이스 지정 (비어있으면 모든 인터페이스)
+  # interfaces = ["eth0"]
+
+# (필요 시) 다른 플러그인 추가...
+# [[inputs.docker]]
+#   endpoint = "unix:///var/run/docker.sock"
+#   # ... 기타 Docker 관련 설정 ...

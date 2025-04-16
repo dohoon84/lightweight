@@ -21,8 +21,8 @@ export class MetricsGateway implements OnGatewayConnection, OnGatewayDisconnect 
   @WebSocketServer() server: Server;
   private readonly logger = new Logger(MetricsGateway.name);
   private clients: Set<Socket> = new Set();
-  private metricsInterval: NodeJS.Timeout | null = null;
-  private readonly UPDATE_INTERVAL = 1000; // 1초마다 메트릭 데이터 전송
+  private dashboardUpdateInterval: NodeJS.Timeout | null = null;
+  private readonly DASHBOARD_UPDATE_INTERVAL = 1000;
 
   constructor(private readonly metricsService: MetricsService) {}
 
@@ -30,9 +30,8 @@ export class MetricsGateway implements OnGatewayConnection, OnGatewayDisconnect 
     this.logger.log(`Client connected: ${client.id}`);
     this.clients.add(client);
 
-    // 첫 클라이언트 연결 시 메트릭 수집 시작
-    if (this.clients.size === 1) {
-      this.startMetricsCollection();
+    if (this.clients.size === 1 && !this.dashboardUpdateInterval) {
+      this.startDashboardUpdates();
     }
   }
 
@@ -40,32 +39,32 @@ export class MetricsGateway implements OnGatewayConnection, OnGatewayDisconnect 
     this.logger.log(`Client disconnected: ${client.id}`);
     this.clients.delete(client);
 
-    // 모든 클라이언트가 연결 해제되면 메트릭 수집 중지
-    if (this.clients.size === 0) {
-      this.stopMetricsCollection();
+    if (this.clients.size === 0 && this.dashboardUpdateInterval) {
+      this.stopDashboardUpdates();
     }
   }
 
-  private startMetricsCollection() {
-    this.logger.log('Starting metrics collection');
-    
-    // 주기적으로 메트릭 수집 및 전송
-    this.metricsInterval = setInterval(async () => {
+  private startDashboardUpdates() {
+    this.logger.log('Starting dashboard updates');
+    this.dashboardUpdateInterval = setInterval(async () => {
       try {
-        const metrics = await this.metricsService.getMetrics();
-        this.server.emit('metrics', metrics);
+        const latestMetrics = this.metricsService.getLatestRawMetrics();
+        if (latestMetrics) {
+          this.server.emit('metrics', latestMetrics);
+        } else {
+          this.logger.debug('No metrics data available yet to send to dashboard.');
+        }
       } catch (error) {
-        this.logger.error(`Error collecting or sending metrics: ${error.message}`);
+        this.logger.error(`Error sending metrics to dashboard: ${error.message}`);
       }
-    }, this.UPDATE_INTERVAL);
+    }, this.DASHBOARD_UPDATE_INTERVAL);
   }
 
-  private stopMetricsCollection() {
-    this.logger.log('Stopping metrics collection');
-    
-    if (this.metricsInterval) {
-      clearInterval(this.metricsInterval);
-      this.metricsInterval = null;
+  private stopDashboardUpdates() {
+    this.logger.log('Stopping dashboard updates');
+    if (this.dashboardUpdateInterval) {
+      clearInterval(this.dashboardUpdateInterval);
+      this.dashboardUpdateInterval = null;
     }
   }
 } 

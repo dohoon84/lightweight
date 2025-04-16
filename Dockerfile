@@ -23,6 +23,9 @@ COPY --from=build /app/dist-pkg/lightweight /app/lightweight
 # public 디렉토리 복사 (정적 파일 제공용)
 COPY --from=build /app/public /app/public
 
+# 빌드 시점에 템플릿 파일을 기본 설정 파일로 복사
+COPY templates/lightweight-metrics.config.template /app/lightweight-metrics.config
+
 # 실행 권한 추가
 RUN chmod +x /app/lightweight
 
