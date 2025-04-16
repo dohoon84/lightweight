@@ -128,26 +128,94 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
     const configPath = process.env.CONFIG_PATH || path.resolve('./lightweight-metrics.config');
     this.logger.log(`Loading configuration from: ${configPath}`);
     try {
-      const configFile = fs.readFileSync(configPath, 'utf-8'); // Use synchronous readFileSync from 'fs'
-      this.config = TOML.parse(configFile) as unknown as MetricsConfig; // Use 'unknown' for type assertion
-      // 필수 설정 검증
-      if (!this.config.agent) throw new Error('Agent configuration is missing.');
-      // outputs.influxdb_v2 설정 검증 (선택 사항이지만, 있으면 유효해야 함)
+      // 1. 파일 읽기
+      const configFile = fs.readFileSync(configPath, 'utf-8');
+      this.logger.log('=== 읽은 파일 내용 (처음 200자) ===');
+      this.logger.log(configFile.substring(0, 200) + '...');
+      
+      // 2. TOML 파싱 시도
+      this.logger.log('=== TOML 파싱 시작 ===');
+      const parsedConfig = TOML.parse(configFile);
+      this.logger.log('TOML 파싱 성공!');
+      
+      // 3. 파싱된 결과 확인
+      this.logger.log('=== 파싱된 설정 구조 ===');
+      this.logger.log('파싱된 객체 키들: ' + Object.keys(parsedConfig).join(', '));
+      if (parsedConfig.agent) {
+        this.logger.log('Agent 설정: ' + JSON.stringify(parsedConfig.agent));
+      } else {
+        this.logger.log('Agent 설정 없음!');
+      }
+      
+      // 4. InfluxDB 설정 특별 확인
+      this.logger.log('=== InfluxDB 설정 확인 ===');
+      if (parsedConfig.outputs) {
+        this.logger.log('outputs 객체 존재: ' + JSON.stringify(Object.keys(parsedConfig.outputs)));
+        
+        const outputs = parsedConfig.outputs as { influxdb_v2?: any };
+        if (outputs.influxdb_v2) {
+          const influx = outputs.influxdb_v2;
+          this.logger.log('influxdb_v2 객체 존재!');
+          this.logger.log('urls: ' + (influx.urls ? JSON.stringify(influx.urls) : 'undefined') + 
+                         ` (${typeof influx.urls}, 배열?: ${Array.isArray(influx.urls)})`);
+          this.logger.log('token: ' + (influx.token ? '값 있음 (표시안함)' : 'undefined') + 
+                         ` (${typeof influx.token})`);
+          this.logger.log('organization: ' + (influx.organization || 'undefined') + 
+                         ` (${typeof influx.organization})`);
+          this.logger.log('bucket: ' + (influx.bucket || 'undefined') + 
+                         ` (${typeof influx.bucket})`);
+        } else {
+          this.logger.log('influxdb_v2 객체 없음!');
+        }
+      } else {
+        this.logger.log('outputs 객체 없음!');
+      }
+      
+      // 5. 설정 변환 및 검증
+      this.logger.log('=== 설정 변환 및 검증 ===');
+      this.config = parsedConfig as unknown as MetricsConfig;
+      this.logger.log('as unknown as MetricsConfig 타입 변환 완료');
+      
+      // 6. 필수 설정 검증
+      if (!this.config.agent) {
+        this.logger.log('agent 설정 누락 오류 발생!');
+        throw new Error('Agent configuration is missing.');
+      }
+      this.logger.log('agent 설정 검증 통과');
+      
+      // 7. InfluxDB 설정 상세 검증
       if (this.config.outputs?.influxdb_v2) {
         const influxConfig = this.config.outputs.influxdb_v2;
-        if (!influxConfig.urls || influxConfig.urls.length === 0 || !influxConfig.token || !influxConfig.organization || !influxConfig.bucket) {
-           throw new Error('InfluxDB v2 output configuration is incomplete.');
+        this.logger.log('InfluxDB 설정 상세 검증:');
+        this.logger.log(`- urls 존재 및 배열: ${!!influxConfig.urls && Array.isArray(influxConfig.urls)}`);
+        this.logger.log(`- urls 배열 길이 > 0: ${!!influxConfig.urls && influxConfig.urls.length > 0}`);
+        this.logger.log(`- token 존재: ${!!influxConfig.token}`);
+        this.logger.log(`- organization 존재: ${!!influxConfig.organization}`);
+        this.logger.log(`- bucket 존재: ${!!influxConfig.bucket}`);
+        
+        const isValid = 
+          !!influxConfig.urls && 
+          Array.isArray(influxConfig.urls) && 
+          influxConfig.urls.length > 0 && 
+          !!influxConfig.token && 
+          !!influxConfig.organization && 
+          !!influxConfig.bucket;
+          
+        this.logger.log(`전체 InfluxDB 설정 유효성: ${isValid}`);
+        
+        if (!isValid) {
+          this.logger.log('InfluxDB 설정 불완전 오류 발생!');
+          throw new Error('InfluxDB v2 output configuration is incomplete.');
         }
       }
-       this.logger.log('Configuration loaded successfully.');
-       // 로드된 설정값 로깅 (민감 정보 제외)
-       this.logger.debug(`Agent config: interval=${this.config.agent.interval}, flush_interval=${this.config.agent.flush_interval}, omit_hostname=${this.config.agent.omit_hostname}`);
-       if (this.config.outputs?.influxdb_v2) {
-         this.logger.debug(`InfluxDB config: url=${this.config.outputs.influxdb_v2.urls[0]}, org=${this.config.outputs.influxdb_v2.organization}, bucket=${this.config.outputs.influxdb_v2.bucket}`);
-       }
+      
+      this.logger.log('설정 로드 및 검증 모두 성공');
     } catch (error) {
-      this.logger.error(`Failed to load or parse configuration file at ${configPath}: ${error.message}`);
-      throw error; // 에러를 다시 던져서 초기화 실패를 알림
+      this.logger.error(`설정 파일 로드 또는 파싱 실패 (${configPath}): ${error.message}`);
+      if (error.stack) {
+        this.logger.error(`스택 트레이스: ${error.stack}`);
+      }
+      throw error;
     }
   }
 

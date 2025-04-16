@@ -38,5 +38,7 @@ lerna-debug.log*
 # .curosr/rules
 .cursor/rules/*
 
-
+# InfluxDB
+influxdb-data
+influxdb-config
 
