@@ -126,17 +126,17 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
 
   private loadConfig() {
     const configPath = process.env.CONFIG_PATH || path.resolve('./lightweight-metrics.config');
-    this.logger.log(`Loading configuration from: ${configPath}`);
+    this.logger.log(`설정 파일 경로: ${configPath}`);
+    
     try {
-      // 1. 파일 읽기
+      // 파일 전체 내용 확인
       const configFile = fs.readFileSync(configPath, 'utf-8');
-      this.logger.log('=== 읽은 파일 내용 (처음 200자) ===');
-      this.logger.log(configFile.substring(0, 200) + '...');
+      this.logger.log('=== 설정 파일 전체 내용 ===');
+      this.logger.log(configFile);
       
-      // 2. TOML 파싱 시도
-      this.logger.log('=== TOML 파싱 시작 ===');
+      // TOML 파싱 시도
       const parsedConfig = TOML.parse(configFile);
-      this.logger.log('TOML 파싱 성공!');
+      this.config = parsedConfig as unknown as MetricsConfig;
       
       // 3. 파싱된 결과 확인
       this.logger.log('=== 파싱된 설정 구조 ===');
@@ -157,13 +157,13 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
           const influx = outputs.influxdb_v2;
           this.logger.log('influxdb_v2 객체 존재!');
           this.logger.log('urls: ' + (influx.urls ? JSON.stringify(influx.urls) : 'undefined') + 
-                         ` (${typeof influx.urls}, 배열?: ${Array.isArray(influx.urls)})`);
+                        ` (${typeof influx.urls}, 배열?: ${Array.isArray(influx.urls)})`);
           this.logger.log('token: ' + (influx.token ? '값 있음 (표시안함)' : 'undefined') + 
-                         ` (${typeof influx.token})`);
+                        ` (${typeof influx.token})`);
           this.logger.log('organization: ' + (influx.organization || 'undefined') + 
-                         ` (${typeof influx.organization})`);
+                        ` (${typeof influx.organization})`);
           this.logger.log('bucket: ' + (influx.bucket || 'undefined') + 
-                         ` (${typeof influx.bucket})`);
+                        ` (${typeof influx.bucket})`);
         } else {
           this.logger.log('influxdb_v2 객체 없음!');
         }
@@ -173,8 +173,52 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
       
       // 5. 설정 변환 및 검증
       this.logger.log('=== 설정 변환 및 검증 ===');
-      this.config = parsedConfig as unknown as MetricsConfig;
-      this.logger.log('as unknown as MetricsConfig 타입 변환 완료');
+      
+      // InfluxDB 설정 직접 추출 (TOML 파싱이 제대로 되지 않은 경우)
+      if (this.config.outputs?.influxdb_v2 && 
+          (!this.config.outputs.influxdb_v2.urls || !this.config.outputs.influxdb_v2.token)) {
+        this.logger.log('TOML 파싱은 되었으나 InfluxDB 값이 누락됨. 정규식으로 직접 추출 시도...');
+        
+        if (!this.config.outputs.influxdb_v2) {
+          if (!this.config.outputs) {
+            this.config.outputs = {};
+          }
+          this.config.outputs.influxdb_v2 = {
+            urls: [],
+            token: '',
+            organization: '',
+            bucket: ''
+          };
+        }
+        
+        // URL 추출
+        const urlMatch = configFile.match(/urls\s*=\s*\[\s*["'](.+?)["']\s*\]/);
+        if (urlMatch && urlMatch[1]) {
+          this.config.outputs.influxdb_v2.urls = [urlMatch[1]];
+          this.logger.log(`URL을 직접 추출: ${urlMatch[1]}`);
+        }
+        
+        // Token 추출
+        const tokenMatch = configFile.match(/token\s*=\s*["'](.+?)["']/);
+        if (tokenMatch && tokenMatch[1]) {
+          this.config.outputs.influxdb_v2.token = tokenMatch[1];
+          this.logger.log('토큰을 직접 추출: [보안상 표시하지 않음]');
+        }
+        
+        // Organization 추출
+        const orgMatch = configFile.match(/organization\s*=\s*["'](.+?)["']/);
+        if (orgMatch && orgMatch[1]) {
+          this.config.outputs.influxdb_v2.organization = orgMatch[1];
+          this.logger.log(`조직을 직접 추출: ${orgMatch[1]}`);
+        }
+        
+        // Bucket 추출
+        const bucketMatch = configFile.match(/bucket\s*=\s*["'](.+?)["']/);
+        if (bucketMatch && bucketMatch[1]) {
+          this.config.outputs.influxdb_v2.bucket = bucketMatch[1];
+          this.logger.log(`버킷을 직접 추출: ${bucketMatch[1]}`);
+        }
+      }
       
       // 6. 필수 설정 검증
       if (!this.config.agent) {
@@ -215,7 +259,81 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
       if (error.stack) {
         this.logger.error(`스택 트레이스: ${error.stack}`);
       }
-      throw error;
+      
+      // 파일 읽기 실패나 TOML 파싱 오류시 정규식으로 직접 추출 시도
+      try {
+        this.logger.warn('파일 파싱 실패, 정규식으로 직접 설정 추출 시도');
+        const configFile = fs.readFileSync(configPath, 'utf-8');
+        
+        // 기본 설정 생성
+        this.config = this.getDefaultConfig();
+        
+        // Agent 설정 추출 (필요시)
+        const intervalMatch = configFile.match(/interval\s*=\s*["'](.+?)["']/);
+        if (intervalMatch && intervalMatch[1]) {
+          this.config.agent.interval = intervalMatch[1];
+        }
+        
+        const flushIntervalMatch = configFile.match(/flush_interval\s*=\s*["'](.+?)["']/);
+        if (flushIntervalMatch && flushIntervalMatch[1]) {
+          this.config.agent.flush_interval = flushIntervalMatch[1];
+        }
+        
+        // InfluxDB 설정 추출
+        if (!this.config.outputs) {
+          this.config.outputs = {};
+        }
+        
+        this.config.outputs.influxdb_v2 = {
+          urls: [],
+          token: '',
+          organization: '',
+          bucket: ''
+        };
+        const influxConfig = this.config.outputs.influxdb_v2;
+        
+        // URLs 추출 (배열)
+        const urlMatch = configFile.match(/urls\s*=\s*\[\s*["'](.+?)["']\s*\]/);
+        if (urlMatch && urlMatch[1]) {
+          influxConfig.urls = [urlMatch[1]];
+          this.logger.log(`URL을 직접 추출: ${urlMatch[1]}`);
+        }
+        
+        // Token 추출
+        const tokenMatch = configFile.match(/token\s*=\s*["'](.+?)["']/);
+        if (tokenMatch && tokenMatch[1]) {
+          influxConfig.token = tokenMatch[1];
+          this.logger.log('토큰을 직접 추출: [보안상 표시하지 않음]');
+        }
+        
+        // Organization 추출
+        const orgMatch = configFile.match(/organization\s*=\s*["'](.+?)["']/);
+        if (orgMatch && orgMatch[1]) {
+          influxConfig.organization = orgMatch[1];
+          this.logger.log(`조직을 직접 추출: ${orgMatch[1]}`);
+        }
+        
+        // Bucket 추출
+        const bucketMatch = configFile.match(/bucket\s*=\s*["'](.+?)["']/);
+        if (bucketMatch && bucketMatch[1]) {
+          influxConfig.bucket = bucketMatch[1];
+          this.logger.log(`버킷을 직접 추출: ${bucketMatch[1]}`);
+        }
+        
+        // inputs 설정 추출 - 필요한 최소 구조만 유지
+        this.config.inputs = {
+          cpu: {},
+          mem: {},
+          disk: {},
+          net: {}
+        };
+        
+        this.logger.log('정규식으로 설정 추출 완료');
+        
+      } catch (regexError) {
+        this.logger.error(`정규식으로 설정 추출 시도 실패: ${regexError.message}`);
+        throw error; // 원래 오류를 다시 던짐
+      }
     }
   }
 
