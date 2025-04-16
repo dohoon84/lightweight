@@ -40,5 +40,7 @@ lerna-debug.log*
 
 # InfluxDB
 influxdb2-data
+influxdb2-data/
 influxdb2-config
+influxdb2-config/
 
