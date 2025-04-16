@@ -538,40 +538,51 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
         // 호스트 CPU ('host' mode, /proc/stat 기반)
         if (this.metricsTarget === 'host' && metrics.cpu.source?.includes('/proc/stat')) {
             const cpuPoint = new Point('cpu')
-                .timestamp(timestamp)
+                .timestamp(timestamp);
                 // .tag('cpu', 'cpu-total') // 전체 CPU 정보임을 명시
-                .intField('user', metrics.cpu.user)
-                .intField('nice', metrics.cpu.nice)
-                .intField('system', metrics.cpu.system)
-                .intField('idle', metrics.cpu.idle)
-                .intField('iowait', metrics.cpu.iowait)
-                .intField('irq', metrics.cpu.irq)
-                .intField('softirq', metrics.cpu.softirq)
-                .intField('steal', metrics.cpu.steal)
-                .intField('total', metrics.cpu.total) // 집계된 total 값 추가
-                .floatField('usage_percent', metrics.cpu.usage_percent ?? 0); // 계산된 사용률
-             points.push(cpuPoint);
-             // TODO: inputs.cpu.percpu = true 인 경우 개별 코어 처리 로직 추가 (/proc/stat 파싱 확장 필요)
+            
+            // undefined 값 확인 후 필드 추가
+            if (metrics.cpu.user !== undefined) cpuPoint.intField('user', metrics.cpu.user);
+            if (metrics.cpu.nice !== undefined) cpuPoint.intField('nice', metrics.cpu.nice);
+            if (metrics.cpu.system !== undefined) cpuPoint.intField('system', metrics.cpu.system);
+            if (metrics.cpu.idle !== undefined) cpuPoint.intField('idle', metrics.cpu.idle);
+            if (metrics.cpu.iowait !== undefined) cpuPoint.intField('iowait', metrics.cpu.iowait);
+            if (metrics.cpu.irq !== undefined) cpuPoint.intField('irq', metrics.cpu.irq);
+            if (metrics.cpu.softirq !== undefined) cpuPoint.intField('softirq', metrics.cpu.softirq);
+            if (metrics.cpu.steal !== undefined) cpuPoint.intField('steal', metrics.cpu.steal);
+            if (metrics.cpu.total !== undefined) cpuPoint.intField('total', metrics.cpu.total); // 집계된 total 값 추가
+            
+            // 사용률은 기본값 0
+            cpuPoint.floatField('usage_percent', metrics.cpu.usage_percent ?? 0);
+            
+            points.push(cpuPoint);
+            // TODO: inputs.cpu.percpu = true 인 경우 개별 코어 처리 로직 추가 (/proc/stat 파싱 확장 필요)
         }
         // 컨테이너 CPU (cgroup v2, cpu.stat)
         else if (metrics.cpu.source?.includes('cpu.stat (v2)')) {
              const cpuPoint = new Point('cpu')
-                 .timestamp(timestamp)
+                 .timestamp(timestamp);
                  // .tag('cpu', 'container')
-                 .intField('usage_usec', metrics.cpu.usage_usec)
-                 .intField('user_usec', metrics.cpu.user_usec)
-                 .intField('system_usec', metrics.cpu.system_usec)
-                 .intField('nr_periods', metrics.cpu.nr_periods)
-                 .intField('nr_throttled', metrics.cpu.nr_throttled)
-                 .intField('throttled_usec', metrics.cpu.throttled_usec);
+             
+             // undefined 값 확인 후 필드 추가
+             if (metrics.cpu.usage_usec !== undefined) cpuPoint.intField('usage_usec', metrics.cpu.usage_usec);
+             if (metrics.cpu.user_usec !== undefined) cpuPoint.intField('user_usec', metrics.cpu.user_usec);
+             if (metrics.cpu.system_usec !== undefined) cpuPoint.intField('system_usec', metrics.cpu.system_usec);
+             if (metrics.cpu.nr_periods !== undefined) cpuPoint.intField('nr_periods', metrics.cpu.nr_periods);
+             if (metrics.cpu.nr_throttled !== undefined) cpuPoint.intField('nr_throttled', metrics.cpu.nr_throttled);
+             if (metrics.cpu.throttled_usec !== undefined) cpuPoint.intField('throttled_usec', metrics.cpu.throttled_usec);
+             
              points.push(cpuPoint);
         }
          // 컨테이너 CPU (cgroup v1, cpuacct.usage)
         else if (metrics.cpu.source?.includes('cpuacct.usage (v1)')) {
              const cpuPoint = new Point('cpu')
-                 .timestamp(timestamp)
+                 .timestamp(timestamp);
                  // .tag('cpu', 'container')
-                 .intField('usage_total_usec', metrics.cpu.usage_usec); // 필드 이름 명확화
+             
+             // undefined 값 확인 후 필드 추가
+             if (metrics.cpu.usage_usec !== undefined) cpuPoint.intField('usage_total_usec', metrics.cpu.usage_usec);
+             
              points.push(cpuPoint);
         }
     }
@@ -582,19 +593,21 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
          if (this.metricsTarget === 'host' && metrics.memory.source?.includes('/proc/meminfo')) {
              const memPoint = new Point('mem')
                  .timestamp(timestamp);
-             // 주요 필드 추가 (바이트 단위)
-             if (metrics.memory.MemTotal) memPoint.intField('total', metrics.memory.MemTotal);
-             if (metrics.memory.MemFree) memPoint.intField('free', metrics.memory.MemFree);
-             if (metrics.memory.MemAvailable) memPoint.intField('available', metrics.memory.MemAvailable);
-             if (metrics.memory.Buffers) memPoint.intField('buffers', metrics.memory.Buffers);
-             if (metrics.memory.Cached) memPoint.intField('cached', metrics.memory.Cached);
-             if (metrics.memory.SwapTotal) memPoint.intField('swap_total', metrics.memory.SwapTotal);
-             if (metrics.memory.SwapFree) memPoint.intField('swap_free', metrics.memory.SwapFree);
-             // 계산된 값
-              if (metrics.memory.MemUsed) memPoint.intField('used', metrics.memory.MemUsed);
-              if (metrics.memory.MemUsedPercent) memPoint.floatField('used_percent', metrics.memory.MemUsedPercent);
-              if (metrics.memory.MemUsedActual) memPoint.intField('used_actual', metrics.memory.MemUsedActual);
-              if (metrics.memory.MemUsedPercentActual) memPoint.floatField('used_percent_actual', metrics.memory.MemUsedPercentActual);
+             
+             // 모든 필드에 대해 undefined 체크 추가
+             if (metrics.memory.memtotal !== undefined) memPoint.intField('total', metrics.memory.memtotal);
+             if (metrics.memory.memfree !== undefined) memPoint.intField('free', metrics.memory.memfree);
+             if (metrics.memory.memavailable !== undefined) memPoint.intField('available', metrics.memory.memavailable);
+             if (metrics.memory.buffers !== undefined) memPoint.intField('buffers', metrics.memory.buffers);
+             if (metrics.memory.cached !== undefined) memPoint.intField('cached', metrics.memory.cached);
+             if (metrics.memory.swaptotal !== undefined) memPoint.intField('swap_total', metrics.memory.swaptotal);
+             if (metrics.memory.swapfree !== undefined) memPoint.intField('swap_free', metrics.memory.swapfree);
+             
+             // 계산된 값도 undefined 체크
+             if (metrics.memory.used !== undefined) memPoint.intField('used', metrics.memory.used);
+             if (metrics.memory.used_percent !== undefined) memPoint.floatField('used_percent', metrics.memory.used_percent);
+             if (metrics.memory.used_actual !== undefined) memPoint.intField('used_actual', metrics.memory.used_actual);
+             if (metrics.memory.used_percent_actual !== undefined) memPoint.floatField('used_percent_actual', metrics.memory.used_percent_actual);
 
              points.push(memPoint);
          }
@@ -602,22 +615,24 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
          else if (metrics.memory.source?.includes('cgroup')) {
              const memPoint = new Point('mem')
                  .timestamp(timestamp);
-                 // .tag('mem_type', 'container');
-             // cgroup v2 (memory.current, memory.stat)
-             if (metrics.memory.current) memPoint.intField('usage', metrics.memory.current); // memory.current 값
-             if (metrics.memory.limit_bytes) memPoint.intField('limit', metrics.memory.limit_bytes); // memory.max 또는 memory.limit_in_bytes
-             if (metrics.memory.stat) { // memory.stat 내부 값들
-                  if (metrics.memory.stat.rss) memPoint.intField('rss', metrics.memory.stat.rss);
-                  if (metrics.memory.stat.cache) memPoint.intField('cache', metrics.memory.stat.cache);
-                  // 기타 필요한 stat 값 추가
+             
+             // undefined 체크 추가
+             if (metrics.memory.current !== undefined) memPoint.intField('usage', metrics.memory.current);
+             if (metrics.memory.limit_bytes !== undefined) memPoint.intField('limit', metrics.memory.limit_bytes);
+             
+             // memory.stat 내부 값 체크
+             if (metrics.memory.stat && typeof metrics.memory.stat === 'object') {
+                 if (metrics.memory.stat.rss !== undefined) memPoint.intField('rss', metrics.memory.stat.rss);
+                 if (metrics.memory.stat.cache !== undefined) memPoint.intField('cache', metrics.memory.stat.cache);
              }
-             // cgroup v1 (memory.usage_in_bytes, memory.limit_in_bytes, memory.stat)
-             // 필요 시 v1 필드 추가
 
-             // 사용률 계산 (limit이 있는 경우)
-             if (metrics.memory.current && metrics.memory.limit_bytes && metrics.memory.limit_bytes > 0) {
+             // 사용률 계산 전 유효성 체크
+             if (metrics.memory.current !== undefined && 
+                 metrics.memory.limit_bytes !== undefined && 
+                 metrics.memory.limit_bytes > 0) {
                  memPoint.floatField('usage_percent', (metrics.memory.current / metrics.memory.limit_bytes) * 100);
              }
+             
              points.push(memPoint);
          }
     }
@@ -773,20 +788,18 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
     try {
       if (this.metricsTarget === 'host') {
         // Host mode: read /host/proc/stat
-        // console.log('Reading CPU stats from:', `${this.hostProcPrefix}/stat`);
+        this.logger.debug('Reading CPU stats from host /proc/stat');
         const statData = await fsPromises.readFile(`${this.hostProcPrefix}/stat`, 'utf8');
-        // console.log('CPU stat data sample:', statData.substring(0, 200));
 
-        const lines = statData.split('\\n');
-        // console.log(`Found ${lines.length} lines in CPU stat data`);
-
+        const lines = statData.split('\n');
+        
         // 전체 CPU 라인 ('cpu ')
         const cpuLine = lines.find(line => line.startsWith('cpu '));
         if (!cpuLine) {
-          console.error('Cannot find total cpu line in /host/proc/stat');
-           return { error: 'Cannot find total cpu line in /host/proc/stat' }; // 에러 객체 반환
+          this.logger.error('Cannot find total cpu line in /host/proc/stat');
+          return { error: 'Cannot find total cpu line in /host/proc/stat' };
         }
-        // console.log('Found Total CPU line:', cpuLine);
+        
         const totalCpuStats = this.parseProcStatCpuLine(cpuLine);
 
         let perCpuStats = {};
@@ -799,15 +812,13 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
                  });
         }
 
-
         return {
           // totalcpu 설정이 true 이거나 기본값일 때 totalCpuStats 포함
-          ...(cpuConfig?.totalcpu !== false && { total: totalCpuStats }),
+          ...(cpuConfig?.totalcpu !== false && { ...totalCpuStats }),
           // percpu 설정이 true 일 때 perCpuStats 포함
           ...(cpuConfig?.percpu && { per_cpu: perCpuStats }),
           source: `${this.hostProcPrefix}/stat`,
         };
-
 
       } else {
         // Container mode: try cgroup v2 first, then v1
@@ -846,10 +857,9 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
         }
       }
     } catch (error) {
-      console.error('CPU stats error:', error);
       this.logger.error(`Failed to get CPU stats: ${error.message}`);
       if (error.stack) {
-        console.error('Stack trace:', error.stack);
+        this.logger.debug(`Stack trace: ${error.stack}`);
       }
       return { error: `Failed to get CPU stats: ${error.message}` };
     }
@@ -857,13 +867,13 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
 
   // /proc/stat의 CPU 라인 파싱 헬퍼
   private parseProcStatCpuLine(line: string): any {
-      const parts = line.trim().split(/\\s+/);
+      const parts = line.trim().split(/\s+/);
       const values = parts.slice(1).map(val => {
           const num = parseInt(val, 10);
           return isNaN(num) ? 0 : num;
       });
 
-      // Jiffies 값을 포함하여 반환
+      // Jiffies 값을 포함하여 반환 (모든 필드 소문자로 통일)
       return {
           user: values[0] || 0,
           nice: values[1] || 0,
@@ -873,12 +883,7 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
           irq: values[5] || 0,
           softirq: values[6] || 0,
           steal: values[7] || 0,
-          // guest: values[8] || 0, // guest/guest_nice 필요 시 추가
-          // guest_nice: values[9] || 0,
           total: values.reduce((sum, val) => sum + val, 0),
-          // 사용률 계산은 여기서는 하지 않음 (이전 값 필요)
-          // InfluxDB로 전송 시점에 계산하거나, Telegraf 등에서 처리하도록 함
-          // usage_percent: this.calculateCpuUsagePercent(values), // 이전 값 없이 계산 불가
       };
   }
 
@@ -897,19 +902,16 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
     return total > 0 ? Math.min(100, Math.max(0, (used / total) * 100)) : 0;
   }
 
-  // 메모리 사용량 정보 수집 (설정 객체 인자 추가 - 현재 사용 안함)
+  // 메모리 사용량 정보 수집 (설정 객체 인자 추가)
   private async getMemoryStats(memConfig: InputConfig): Promise<any> {
      // memConfig는 현재 사용되지 않지만, 추후 확장 가능
     try {
       if (this.metricsTarget === 'host') {
         // Host mode: read /host/proc/meminfo
-        // console.log('Reading memory info from:', `${this.hostProcPrefix}/meminfo`);
+        this.logger.debug('Reading memory info from host /proc/meminfo');
         const memInfoData = await fsPromises.readFile(`${this.hostProcPrefix}/meminfo`, 'utf8');
 
-        // console.log('Memory info sample:', memInfoData.substring(0, 200));
-
-        const lines = memInfoData.split('\\n');
-        // console.log(`Found ${lines.length} lines in memory info`);
+        const lines = memInfoData.split('\n');
 
         const stats = {};
         const rawValues = {}; // 디버깅용 원시 값 저장
@@ -919,9 +921,9 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
           if (!line.trim()) return;
 
           // 예: "MemTotal:       16110976 kB"
-          const match = line.match(/^([a-zA-Z_()]+):\\s+(\\d+)(?:\\s+(\\w+))?/); // 키 패턴 확장 (괄호, 언더스코어 허용)
+          const match = line.match(/^([a-zA-Z_()]+):\s+(\d+)(?:\s+(\w+))?/); // 키 패턴 확장 (괄호, 언더스코어 허용)
           if (match) {
-            const key = match[1]; // 예: "MemTotal", "SwapCached"
+            const key = match[1].toLowerCase(); // 키를 소문자로 변환 (예: "memtotal")
             const value = parseInt(match[2], 10); // 예: 16110976
             const unit = match[3] || ''; // 예: "kB" (없을 수도 있음)
 
@@ -930,19 +932,13 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
 
               // 단위에 따라 바이트로 변환 (kB 외에는 기본값 사용)
               if (unit.toLowerCase() === 'kb') {
-                stats[key.toLowerCase().replace(/[^a-z0-9_]/g, '_')] = value * 1024; // 소문자, 특수문자 언더스코어로 변환
+                stats[key] = value * 1024; // 소문자, 특수문자 언더스코어로 변환
               } else {
-                 stats[key.toLowerCase().replace(/[^a-z0-9_]/g, '_')] = value; // 기본 바이트 또는 단위 없는 값
+                 stats[key] = value; // 기본 바이트 또는 단위 없는 값
               }
             }
           }
         });
-
-        // console.log('Parsed raw memory values:', rawValues);
-
-        if (!stats['memtotal']) {
-          console.warn('memtotal not found in parsed memory info');
-        }
 
         // 계산된 메모리 사용량 추가 (바이트 단위)
         if (stats['memtotal'] && stats['memfree'] !== undefined) {
@@ -962,7 +958,6 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
 
         stats['source'] = `${this.hostProcPrefix}/meminfo`;
         return stats;
-
 
       } else {
         // Container mode: try cgroup v2 first, then v1
@@ -1029,59 +1024,42 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // 디스크 I/O 통계 수집 (설정 객체 인자 추가 - 현재 사용 안함)
+  // 디스크 I/O 통계 수집 (설정 객체 인자 추가)
   private async getDiskIoStats(diskConfig: InputConfig): Promise<any> {
     // diskConfig는 현재 사용되지 않지만, 특정 장치 필터링 등에 사용 가능
     try {
       if (this.metricsTarget === 'host') {
         // Host mode: read /host/proc/diskstats
-        // console.log('Reading disk I/O stats from:', `${this.hostProcPrefix}/diskstats`);
+        this.logger.debug('Reading disk I/O stats from host /proc/diskstats');
         const diskStatsData = await fsPromises.readFile(`${this.hostProcPrefix}/diskstats`, 'utf8');
-        // console.log('Disk IO data sample:', diskStatsData.substring(0, 300));
 
-        const lines = diskStatsData.split('\\n');
+        const lines = diskStatsData.split('\n');
         const stats = {};
-        // https://www.kernel.org/doc/Documentation/iostats.txt
-        // Field 1 -- major number
-        // Field 2 -- minor mumber
-        // Field 3 -- device name
-        // Field 4 -- reads completed successfully
-        // Field 5 -- reads merged
-        // Field 6 -- sectors read
-        // Field 7 -- time spent reading (ms)
-        // Field 8 -- writes completed
-        // Field 9 -- writes merged
-        // Field 10 -- sectors written
-        // Field 11 -- time spent writing (ms)
-        // Field 12 -- I/Os currently in progress
-        // Field 13 -- time spent doing I/Os (ms)
-        // Field 14 -- weighted time spent doing I/Os (ms)
-        // ... (newer fields for discard, flush)
 
         lines.forEach(line => {
           const parts = line.trim().split(/\s+/);
           if (parts.length >= 14) { // 최소 필드 수 확인
             const deviceName = parts[2];
             // 파티션 제외 (숫자로 끝나는 이름) - 필요 시 조정
-            if (!deviceName || /\\d+$/.test(deviceName)) return;
+            if (!deviceName || /\d+$/.test(deviceName)) return;
 
             stats[deviceName] = {
-              reads_completed: parseInt(parts[3], 10),
-              reads_merged: parseInt(parts[4], 10),
-              sectors_read: parseInt(parts[5], 10),
-              read_time_ms: parseInt(parts[6], 10),
-              writes_completed: parseInt(parts[7], 10),
-              writes_merged: parseInt(parts[8], 10),
-              sectors_written: parseInt(parts[9], 10),
-              write_time_ms: parseInt(parts[10], 10),
-              io_in_progress: parseInt(parts[11], 10),
-              io_time_ms: parseInt(parts[12], 10),
-              weighted_io_time_ms: parseInt(parts[13], 10),
+              reads_completed: parseInt(parts[3], 10) || 0,
+              reads_merged: parseInt(parts[4], 10) || 0,
+              sectors_read: parseInt(parts[5], 10) || 0,
+              read_time_ms: parseInt(parts[6], 10) || 0,
+              writes_completed: parseInt(parts[7], 10) || 0,
+              writes_merged: parseInt(parts[8], 10) || 0,
+              sectors_written: parseInt(parts[9], 10) || 0,
+              write_time_ms: parseInt(parts[10], 10) || 0,
+              io_in_progress: parseInt(parts[11], 10) || 0,
+              io_time_ms: parseInt(parts[12], 10) || 0,
+              weighted_io_time_ms: parseInt(parts[13], 10) || 0,
               source: `${this.hostProcPrefix}/diskstats`,
             };
           }
         });
-        // console.log('Parsed host disk IO stats keys:', Object.keys(stats));
+
         return stats;
 
       } else {
@@ -1139,10 +1117,9 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
         }
       }
     } catch (error) {
-      console.error('Disk I/O stats error:', error);
       this.logger.error(`Failed to get disk I/O stats: ${error.message}`);
       if (error.stack) {
-        console.error('Stack trace:', error.stack);
+        this.logger.debug(`Stack trace: ${error.stack}`);
       }
       return { error: `Failed to get disk I/O stats: ${error.message}` };
     }
@@ -1150,13 +1127,12 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
 
   // 디스크 사용량 통계 수집 (설정 객체 인자 추가)
   private async getDiskUsageStats(diskConfig: InputConfig): Promise<any> {
-     const ignoreFs = diskConfig?.ignore_fs || []; // 설정에서 무시할 파일 시스템 목록 가져오기
-     const stats = {};
+    const ignoreFs = diskConfig?.ignore_fs || []; // 설정에서 무시할 파일 시스템 목록 가져오기
+    const stats = {};
 
-     try {
+    try {
         // 호스트 모드: 루트 '/' 또는 특정 경로의 디스크 사용량 확인
         // 컨테이너 모드: 컨테이너 내부의 '/' 경로 확인 (주로 overlayfs 등)
-        // check-disk-space는 지정된 경로가 속한 파일 시스템의 사용량을 반환
         const basePath = this.metricsTarget === 'host' ? '/' : '/'; // 호스트 모드도 일단 / 기준. 필요시 설정에서 경로 받아오도록 수정
         this.logger.debug(`Checking disk space for path: ${basePath}`);
 
@@ -1167,7 +1143,7 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
 
         try {
            const mountsData = await fsPromises.readFile(mountsPath, 'utf8');
-           mountPoints = mountsData.split('\\n')
+           mountPoints = mountsData.split('\n')
                .map(line => {
                    const parts = line.split(' ');
                    if (parts.length < 3) return null;
@@ -1220,75 +1196,63 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
         // console.log('Parsed disk usage stats:', stats);
         return stats;
 
-     } catch (error) {
+    } catch (error) {
         console.error('Disk usage stats error:', error);
         this.logger.error(`Failed to get disk usage stats: ${error.message}`);
         return { error: `Failed to get disk usage stats: ${error.message}` };
-     }
-  }
+    }
+}
 
 
   // 네트워크 통계 수집 (설정 객체 인자 추가)
   private async getNetworkStats(netConfig: InputConfig): Promise<any> {
-      const interfacesToInclude = netConfig?.interfaces; // 설정에서 포함할 인터페이스 목록
-      try {
-          const netDevPath = this.metricsTarget === 'host' ? `${this.hostProcPrefix}/net/dev` : '/proc/net/dev';
-          // console.log('Reading network stats from:', netDevPath);
-          const netData = await fsPromises.readFile(netDevPath, 'utf8');
-          // console.log('Net dev data sample:', netData.substring(0, 300));
+    const interfacesToInclude = netConfig?.interfaces; // 설정에서 포함할 인터페이스 목록
+    try {
+        const netDevPath = this.metricsTarget === 'host' ? `${this.hostProcPrefix}/net/dev` : '/proc/net/dev';
+        this.logger.debug(`Reading network stats from ${netDevPath}`);
+        const netData = await fsPromises.readFile(netDevPath, 'utf8');
 
-          const lines = netData.split('\\n');
-          const stats = {};
-          // Header lines skipped (first 2 lines)
-          for (let i = 2; i < lines.length; i++) {
-              const line = lines[i].trim();
-              if (!line) continue;
+        const lines = netData.split('\n');
+        const stats = {};
+        // Header lines skipped (first 2 lines)
+        for (let i = 2; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
 
-              const parts = line.split(/:\s+|\s+/); // 콜론 또는 공백으로 분리
-              const interfaceName = parts[0];
+            const parts = line.split(/:\s+|\s+/); // 콜론 또는 공백으로 분리
+            const interfaceName = parts[0];
 
-              // 설정된 인터페이스 목록이 있고, 현재 인터페이스가 목록에 없으면 건너뜀
-              if (interfacesToInclude && interfacesToInclude.length > 0 && !interfacesToInclude.includes(interfaceName)) {
-                  continue;
-              }
+            // 설정된 인터페이스 목록이 있고, 현재 인터페이스가 목록에 없으면 건너뜀
+            if (interfacesToInclude && interfacesToInclude.length > 0 && !interfacesToInclude.includes(interfaceName)) {
+                continue;
+            }
 
-              // lo 인터페이스 제외 (일반적으로 불필요) - 필요시 설정으로 제어
-              if (interfaceName === 'lo') continue;
+            // lo 인터페이스 제외 (일반적으로 불필요) - 필요시 설정으로 제어
+            if (interfaceName === 'lo') continue;
 
-
-              if (parts.length >= 17) { // 기본 IPv4 카운터 수 확인
-                  stats[interfaceName] = {
-                      rx_bytes: parseInt(parts[1], 10),
-                      rx_packets: parseInt(parts[2], 10),
-                      rx_errors: parseInt(parts[3], 10),
-                      rx_dropped: parseInt(parts[4], 10),
-                      // rx_fifo: parseInt(parts[5], 10),
-                      // rx_frame: parseInt(parts[6], 10),
-                      // rx_compressed: parseInt(parts[7], 10),
-                      // rx_multicast: parseInt(parts[8], 10),
-                      tx_bytes: parseInt(parts[9], 10),
-                      tx_packets: parseInt(parts[10], 10),
-                      tx_errors: parseInt(parts[11], 10),
-                      tx_dropped: parseInt(parts[12], 10),
-                      // tx_fifo: parseInt(parts[13], 10),
-                      // tx_collisions: parseInt(parts[14], 10),
-                      // tx_carrier: parseInt(parts[15], 10),
-                      // tx_compressed: parseInt(parts[16], 10),
-                      source: netDevPath,
-                  };
-              }
-          }
-          // console.log('Parsed network stats keys:', Object.keys(stats));
-          return stats;
-      } catch (error) {
-          console.error('Network stats error:', error);
-          this.logger.error(`Failed to get network stats: ${error.message}`);
-          if (error.stack) {
-              console.error('Stack trace:', error.stack);
-          }
-          return { error: `Failed to get network stats: ${error.message}` };
-      }
-  }
+            if (parts.length >= 17) { // 기본 IPv4 카운터 수 확인
+                stats[interfaceName] = {
+                    rx_bytes: parseInt(parts[1], 10) || 0,
+                    rx_packets: parseInt(parts[2], 10) || 0,
+                    rx_errors: parseInt(parts[3], 10) || 0,
+                    rx_dropped: parseInt(parts[4], 10) || 0,
+                    tx_bytes: parseInt(parts[9], 10) || 0,
+                    tx_packets: parseInt(parts[10], 10) || 0,
+                    tx_errors: parseInt(parts[11], 10) || 0,
+                    tx_dropped: parseInt(parts[12], 10) || 0,
+                    source: netDevPath,
+                };
+            }
+        }
+        return stats;
+    } catch (error) {
+        this.logger.error(`Failed to get network stats: ${error.message}`);
+        if (error.stack) {
+            this.logger.debug(`Stack trace: ${error.stack}`);
+        }
+        return { error: `Failed to get network stats: ${error.message}` };
+    }
+}
 
   // 최신 원시 메트릭 데이터를 반환하는 공개 메소드 추가
   public getLatestRawMetrics(): any | null {
