@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { promises as fs } from 'fs';
+// Add the import for check-disk-space
+import checkDiskSpace from 'check-disk-space';
 // Remove exec import if no longer needed after refactoring
-// import { exec } from 'child_process'; 
+// import { exec } from 'child_process';
 // import { promisify } from 'util';
 
 // const execAsync = promisify(exec);
@@ -22,6 +24,10 @@ export class MetricsService {
       this.logger.warn(
         `Running in 'host' mode. Ensure the host's /proc filesystem is mounted read-only at ${this.hostProcPrefix} in the container. (e.g., -v /proc:${this.hostProcPrefix}:ro)`,
       );
+      // Also log assumption about root filesystem access for disk usage
+      this.logger.warn(
+          `Disk usage metrics in 'host' mode will target '/'. Ensure the relevant host filesystem is accessible at this path.`
+      );
     }
   }
 
@@ -31,36 +37,41 @@ export class MetricsService {
       // 디버깅을 위해 더 자세한 로그 추가
       console.log(`Getting metrics in ${this.metricsTarget} mode`);
       console.log(`Host proc prefix: ${this.hostProcPrefix}`);
-      
-      const [cpuStats, memoryStats, diskStats, networkStats] = await Promise.all([
+
+      // Add getDiskUsageStats to Promise.all
+      const [cpuStats, memoryStats, diskIoStats, networkStats, diskUsageStats] = await Promise.all([
         this.getCpuStats(),
         this.getMemoryStats(),
-        this.getDiskStats(),
+        this.getDiskIoStats(), // Renamed from getDiskStats for clarity
         this.getNetworkStats(),
+        this.getDiskUsageStats(), // Add call to new method
       ]);
-      
+
       // 각 결과 로깅
       console.log('CPU Stats:', JSON.stringify(cpuStats).substring(0, 200));
       console.log('Memory Stats:', JSON.stringify(memoryStats).substring(0, 200));
-      console.log('Disk Stats keys:', Object.keys(diskStats));
+      // Use renamed variable
+      console.log('Disk IO Stats keys:', Object.keys(diskIoStats));
       console.log('Network Stats keys:', Object.keys(networkStats));
+      console.log('Disk Usage Stats:', JSON.stringify(diskUsageStats)); // Log new stats
 
       return {
         timestamp: new Date().toISOString(),
         target: this.metricsTarget, // Add target mode info
         cpu: cpuStats,
         memory: memoryStats,
-        disk: diskStats,
+        diskIO: diskIoStats, // Renamed key
         network: networkStats,
+        diskUsage: diskUsageStats, // Add new disk usage key
       };
     } catch (error) {
       this.logger.error(`Failed to collect metrics: ${error.message}`);
       console.error('Error collecting metrics:', error);
       // Return error structure consistently
-      return { 
+      return {
         timestamp: new Date().toISOString(),
         target: this.metricsTarget,
-        error: `Failed to collect metrics: ${error.message}` 
+        error: `Failed to collect metrics: ${error.message}`
       };
     }
   }
@@ -284,36 +295,37 @@ export class MetricsService {
     }
   }
 
-  // 디스크 I/O 정보 수집
-  private async getDiskStats(): Promise<any> {
+  // Renamed from getDiskStats to getDiskIoStats for clarity
+  private async getDiskIoStats(): Promise<any> {
     try {
       if (this.metricsTarget === 'host') {
         // Host mode: read /host/proc/diskstats
-        console.log('Reading disk stats from:', `${this.hostProcPrefix}/diskstats`);
+        // Changed log message for clarity
+        console.log('Reading disk I/O stats from:', `${this.hostProcPrefix}/diskstats`);
         const diskStatData = await fs.readFile(`${this.hostProcPrefix}/diskstats`, 'utf8');
-        
+
         // 디버깅: 파일 내용 일부 출력
-        console.log('Disk stats sample:', diskStatData.substring(0, 200));
-        
+        console.log('Disk I/O stats sample:', diskStatData.substring(0, 200)); // Changed log message
+
         // 줄 단위로 분리
         const lines = diskStatData.trim().split('\n');
-        console.log(`Found ${lines.length} lines in disk stats`);
-        
+        console.log(`Found ${lines.length} lines in disk I/O stats`); // Changed log message
+
         const stats = {};
         let deviceCount = 0;
-        
+
         lines.forEach(line => {
           // 빈 라인 건너뛰기
           if (!line.trim()) return;
-          
+
           const parts = line.trim().split(/\s+/);
           // Format: major minor device reads reads_merged sectors read_ms writes writes_merged sectors write_ms io_in_progress io_ms weighted_io_ms
-          if (parts.length >= 14) { 
+          if (parts.length >= 14) {
             const device = parts[2];
-            
+
             // 루프 장치, RAM 장치 등 필터링 (선택적)
             // if (device.startsWith('loop') || device.startsWith('ram')) return;
-            
+
             deviceCount++;
             stats[device] = {
               reads_completed: parseInt(parts[3], 10) || 0,
@@ -326,21 +338,21 @@ export class MetricsService {
               time_io_ms: parseInt(parts[12], 10) || 0,
               weighted_time_io_ms: parseInt(parts[13], 10) || 0,
             };
-            
+
             // 섹터 크기는 일반적으로 512바이트이므로 바이트 단위로 변환
             stats[device].bytes_read = stats[device].sectors_read * 512;
             stats[device].bytes_written = stats[device].sectors_written * 512;
           }
         });
-        
-        console.log(`Parsed stats for ${deviceCount} disk devices`);
-        
+
+        console.log(`Parsed I/O stats for ${deviceCount} disk devices`); // Changed log message
+
         // 실제 물리 디스크 목록 (예: xvda, sda 등)
         const physicalDisks = Object.keys(stats).filter(dev => !dev.match(/\d+$/) || dev.match(/^(xvd|sd|hd|vd|nvme)/));
-        
+
         if (physicalDisks.length > 0) {
-          console.log('Found physical disks:', physicalDisks);
-          
+          console.log('Found physical disks for I/O:', physicalDisks); // Changed log message
+
           // 주요 디스크 정보를 상위 레벨에 추가
           const mainDisk = physicalDisks[0];
           stats['main_disk'] = mainDisk;
@@ -349,9 +361,9 @@ export class MetricsService {
           stats['total_bytes_read'] = stats[mainDisk].bytes_read;
           stats['total_bytes_written'] = stats[mainDisk].bytes_written;
         } else {
-          console.warn('No physical disks found in parsed data');
+          console.warn('No physical disks found in parsed disk I/O data'); // Changed log message
         }
-        
+
         stats['source'] = `${this.hostProcPrefix}/diskstats`;
         return stats;
       } else {
@@ -408,7 +420,7 @@ export class MetricsService {
                 }
               });
             };
-            
+
             parseBlkio(blkioRead, 'bytes');
             parseBlkio(blkioWrite, 'ops');
 
@@ -419,17 +431,56 @@ export class MetricsService {
                 throw new Error('No v1 blkio data found');
             }
         } catch(e) {
-            this.logger.warn(`No cgroup disk stats found: ${e.message}. Disk stats will be incomplete in container mode.`);
-            return { error: 'Could not read container disk stats from cgroups.', source: 'cgroup (failed)' };
+            // Changed log message
+            this.logger.warn(`No cgroup disk I/O stats found: ${e.message}. Disk I/O stats will be incomplete in container mode.`);
+            // Changed error message
+            return { error: 'Could not read container disk I/O stats from cgroups.', source: 'cgroup (failed)' };
         }
       }
     } catch (error) {
-      console.error('Disk stats error:', error);
-      this.logger.error(`Failed to get disk stats: ${error.message}`);
+      // Changed log message
+      console.error('Disk I/O stats error:', error);
+      // Changed log message
+      this.logger.error(`Failed to get disk I/O stats: ${error.message}`);
       if (error.stack) {
         console.error('Stack trace:', error.stack);
       }
-      return { error: `Failed to get disk stats: ${error.message}` };
+      // Changed error message for clarity
+      return { error: `Failed to get disk I/O stats: ${error.message}` };
+    }
+  }
+
+  // New method to get disk usage stats
+  private async getDiskUsageStats(): Promise<any> {
+    // Target the root directory by default.
+    // In 'host' mode, this assumes '/' inside the container maps appropriately
+    // to the host filesystem you want to monitor.
+    const targetPath = '/';
+    try {
+      console.log(`Checking disk usage for path: ${targetPath}`);
+      const diskSpace = await checkDiskSpace(targetPath);
+
+      // diskSpace contains { diskPath: '/', free: Bytes, size: Bytes }
+      const used = diskSpace.size - diskSpace.free;
+      const usagePercent = diskSpace.size > 0 ? (used / diskSpace.size) * 100 : 0;
+
+      console.log(`Disk usage for ${targetPath}:`, diskSpace);
+
+      return {
+        path: diskSpace.diskPath,
+        total_bytes: diskSpace.size,
+        free_bytes: diskSpace.free,
+        used_bytes: used,
+        usage_percent: parseFloat(usagePercent.toFixed(2)), // Format percentage
+        source: 'check-disk-space',
+      };
+    } catch (error) {
+      console.error(`Disk usage stats error for path ${targetPath}:`, error);
+      this.logger.error(`Failed to get disk usage stats for ${targetPath}: ${error.message}`);
+      return {
+        error: `Failed to get disk usage stats for ${targetPath}: ${error.message}`,
+        source: 'check-disk-space (failed)'
+      };
     }
   }
 
