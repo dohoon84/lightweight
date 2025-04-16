@@ -244,6 +244,36 @@
                 <canvas id="network-history"></canvas>
             </div>
         </div>
+
+        <!-- New Disk Usage Card -->
+        <div class="card">
+            <div class="card-header">
+                <span>Disk Usage (<span id="disk-usage-path">/</span>)</span>
+                <span id="disk-usage-percent" class="card-value">-%</span>
+            </div>
+            <div class="gauge-container">
+                <canvas id="disk-usage-gauge"></canvas>
+            </div>
+            <div class="metric-row">
+                <div class="metric-item">
+                    <div class="metric-label">Total</div>
+                    <div id="disk-usage-total" class="metric-value">-</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">Used</div>
+                    <div id="disk-usage-used" class="metric-value">-</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">Free</div>
+                    <div id="disk-usage-free" class="metric-value">-</div>
+                </div>
+            </div>
+            <!-- Optional: History chart for disk usage? Maybe not needed -->
+            <!-- <div class="history-chart">
+                <canvas id="disk-usage-history"></canvas>
+            </div> -->
+        </div>
+
     </div>
     
     <div class="timestamp" id="timestamp">Last update: -</div>
@@ -456,6 +486,28 @@
             }
         });
         
+        // New Disk Usage Gauge Chart
+        const diskUsageGauge = new Chart(document.getElementById('disk-usage-gauge'), {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [0, 100],
+                    backgroundColor: ['#9b59b6', '#ecf0f1'], // Purple color
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                circumference: 180,
+                rotation: -90,
+                cutout: '70%',
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: { enabled: false },
+                    legend: { display: false }
+                }
+            }
+        });
+        
         // Helper functions
         function formatBytes(bytes, decimals = 2) {
             if (bytes === 0) return '0 B';
@@ -476,6 +528,7 @@
         let lastNetworkRx = 0;
         let lastNetworkTx = 0;
         let lastTimestamp = null;
+        let previousMetrics = null;
         
         // Connect to Socket.IO
         const socket = io({ path: '/socket.io' });
@@ -562,29 +615,31 @@
                 memoryHistory.update();
             }
             
-            // Update Disk information
-            if (data.disk) {
-                if (data.disk.main_disk) {
-                    document.getElementById('disk-info').textContent = data.disk.main_disk;
+            // Update Disk information (I/O Rates)
+            if (data.diskIO) { // Changed from data.disk to data.diskIO
+                const diskIoData = data.diskIO; // Use alias
+                if (diskIoData.main_disk) {
+                    document.getElementById('disk-info').textContent = diskIoData.main_disk;
                 }
                 
-                if (data.disk.total_bytes_read !== undefined && data.disk.total_bytes_written !== undefined) {
-                    document.getElementById('disk-read').textContent = formatBytes(data.disk.total_bytes_read);
-                    document.getElementById('disk-write').textContent = formatBytes(data.disk.total_bytes_written);
+                if (diskIoData.total_bytes_read !== undefined && diskIoData.total_bytes_written !== undefined) {
+                    document.getElementById('disk-read').textContent = formatBytes(diskIoData.total_bytes_read);
+                    document.getElementById('disk-write').textContent = formatBytes(diskIoData.total_bytes_written);
                     
                     // Calculate rates
                     let readRate = 0;
                     let writeRate = 0;
                     
-                    if (lastDiskRead > 0) {
-                        readRate = (data.disk.total_bytes_read - lastDiskRead) / timeDiff / 1024 / 1024; // MB/s
+                    // Check previousMetrics exists and has the diskIO data
+                    if (lastDiskRead > 0 && lastTimestamp && previousMetrics?.diskIO?.total_bytes_read !== undefined) {
+                        readRate = (diskIoData.total_bytes_read - previousMetrics.diskIO.total_bytes_read) / timeDiff / 1024 / 1024; // MB/s
                     }
                     
-                    if (lastDiskWrite > 0) {
-                        writeRate = (data.disk.total_bytes_written - lastDiskWrite) / timeDiff / 1024 / 1024; // MB/s
+                    if (lastDiskWrite > 0 && lastTimestamp && previousMetrics?.diskIO?.total_bytes_written !== undefined) {
+                        writeRate = (diskIoData.total_bytes_written - previousMetrics.diskIO.total_bytes_written) / timeDiff / 1024 / 1024; // MB/s
                     }
                     
-                    // Only update if values changed
+                    // Only update if values changed and rates are non-negative
                     if (readRate >= 0 && writeRate >= 0) {
                         diskHistory.data.datasets[0].data.push(readRate);
                         diskHistory.data.datasets[0].data.shift();
@@ -593,9 +648,42 @@
                         diskHistory.update();
                     }
                     
-                    lastDiskRead = data.disk.total_bytes_read;
-                    lastDiskWrite = data.disk.total_bytes_written;
+                    // Update last values for next calculation - ensure these are updated correctly
+                    lastDiskRead = diskIoData.total_bytes_read;
+                    lastDiskWrite = diskIoData.total_bytes_written;
                 }
+            } else {
+                // Handle case where diskIO data is missing
+                document.getElementById('disk-info').textContent = 'N/A';
+                document.getElementById('disk-read').textContent = 'N/A';
+                document.getElementById('disk-write').textContent = 'N/A';
+            }
+
+            // Update Disk Usage information (NEW)
+            if (data.diskUsage) {
+                const usageData = data.diskUsage;
+                const usagePercent = usageData.usage_percent || 0;
+
+                document.getElementById('disk-usage-path').textContent = usageData.path || '/';
+                document.getElementById('disk-usage-percent').textContent = `${usagePercent.toFixed(1)}%`;
+                document.getElementById('disk-usage-total').textContent = formatBytes(usageData.total_bytes || 0);
+                document.getElementById('disk-usage-used').textContent = formatBytes(usageData.used_bytes || 0);
+                document.getElementById('disk-usage-free').textContent = formatBytes(usageData.free_bytes || 0);
+
+                // Update Disk Usage gauge
+                diskUsageGauge.data.datasets[0].data = [usagePercent, 100 - usagePercent];
+                diskUsageGauge.update();
+
+            } else {
+                 // Handle case where diskUsage data is missing
+                 document.getElementById('disk-usage-path').textContent = 'N/A';
+                 document.getElementById('disk-usage-percent').textContent = 'N/A';
+                 document.getElementById('disk-usage-total').textContent = 'N/A';
+                 document.getElementById('disk-usage-used').textContent = 'N/A';
+                 document.getElementById('disk-usage-free').textContent = 'N/A';
+                 // Optionally reset gauge
+                 diskUsageGauge.data.datasets[0].data = [0, 100];
+                 diskUsageGauge.update();
             }
             
             // Update Network information
@@ -633,6 +721,9 @@
                     lastNetworkTx = data.network.total_tx_bytes;
                 }
             }
+
+            // Store the entire data object for rate calculation reference
+            previousMetrics = data;
         });
         
         // Toggle raw data display

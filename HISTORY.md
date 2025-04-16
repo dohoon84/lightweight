@@ -1,5 +1,17 @@
 # 프로젝트 개발 히스토리
 
+## 2025-04-16
+- **디스크 사용량 메트릭 수집 기능 추가**
+  - `check-disk-space` 라이브러리를 사용하여 디스크 전체 용량, 사용 용량, 여유 용량, 사용률(%) 수집
+  - `src/metrics/metrics.service.ts`에 관련 로직 추가 (`getDiskUsageStats` 메서드)
+  - `getDiskStats` 메서드를 `getDiskIoStats`로 이름 변경하여 명확성 개선
+  - `getMetrics` 반환 객체에 `diskUsage` 필드 추가 (기존 `disk`는 `diskIO`로 변경)
+- **대시보드 UI 업데이트**
+  - `public/index.html`에 디스크 사용량 표시 카드 추가 (게이지 차트, 총/사용/여유 공간 표시)
+  - 디스크 사용량 데이터를 처리하고 표시하는 JavaScript 로직 추가
+- **타입 정의 추가**
+  - `check-disk-space` 라이브러리 타입 정의 (`@types/check-disk-space`) 추가하여 TypeScript 컴파일 오류 해결
+
 ## 2025-04-15
 - **호스트 메트릭 수집 기능 추가**
   - 메트릭 수집 모드를 'container'와 'host'로 구분
