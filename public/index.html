@@ -567,16 +567,17 @@
             
             // Update CPU information
             if (data.cpu) {
-                const cpuUsage = data.cpu.usage_percent || 0;
+                const cpuUsage = data.cpu.usage_percent !== undefined ? data.cpu.usage_percent : 
+                                (data.cpu.used_percent !== undefined ? data.cpu.used_percent : 0);
                 document.getElementById('cpu-usage').textContent = `${cpuUsage.toFixed(1)}%`;
                 
-                if (data.cpu.user !== undefined) {
+                if (data.cpu.user !== undefined && data.cpu.total !== undefined) {
                     document.getElementById('cpu-user').textContent = `${((data.cpu.user / data.cpu.total) * 100).toFixed(1)}%`;
                 }
-                if (data.cpu.system !== undefined) {
+                if (data.cpu.system !== undefined && data.cpu.total !== undefined) {
                     document.getElementById('cpu-system').textContent = `${((data.cpu.system / data.cpu.total) * 100).toFixed(1)}%`;
                 }
-                if (data.cpu.iowait !== undefined) {
+                if (data.cpu.iowait !== undefined && data.cpu.total !== undefined) {
                     document.getElementById('cpu-iowait').textContent = `${((data.cpu.iowait / data.cpu.total) * 100).toFixed(1)}%`;
                 }
                 
@@ -592,17 +593,32 @@
             
             // Update Memory information
             if (data.memory) {
-                const memUsage = data.memory.MemUsedPercentActual || 0;
+                const memUsage = data.memory.used_percent_actual !== undefined ? data.memory.used_percent_actual : 
+                                (data.memory.used_percent !== undefined ? data.memory.used_percent : 
+                                (data.memory.MemUsedPercentActual !== undefined ? data.memory.MemUsedPercentActual : 0));
+                
                 document.getElementById('memory-usage').textContent = `${memUsage.toFixed(1)}%`;
                 
-                if (data.memory.MemTotal !== undefined) {
+                if (data.memory.memtotal !== undefined) {
+                    document.getElementById('memory-total').textContent = formatBytes(data.memory.memtotal);
+                } else if (data.memory.MemTotal !== undefined) {
                     document.getElementById('memory-total').textContent = formatBytes(data.memory.MemTotal);
                 }
-                if (data.memory.MemUsedActual !== undefined) {
+                
+                if (data.memory.used_actual !== undefined) {
+                    document.getElementById('memory-used').textContent = formatBytes(data.memory.used_actual);
+                } else if (data.memory.MemUsedActual !== undefined) {
                     document.getElementById('memory-used').textContent = formatBytes(data.memory.MemUsedActual);
+                } else if (data.memory.used !== undefined) {
+                    document.getElementById('memory-used').textContent = formatBytes(data.memory.used);
                 }
-                if (data.memory.MemAvailable !== undefined) {
+                
+                if (data.memory.memavailable !== undefined) {
+                    document.getElementById('memory-free').textContent = formatBytes(data.memory.memavailable);
+                } else if (data.memory.MemAvailable !== undefined) {
                     document.getElementById('memory-free').textContent = formatBytes(data.memory.MemAvailable);
+                } else if (data.memory.available !== undefined) {
+                    document.getElementById('memory-free').textContent = formatBytes(data.memory.available);
                 }
                 
                 // Update Memory gauge
@@ -616,30 +632,42 @@
             }
             
             // Update Disk information (I/O Rates)
-            if (data.diskIO) { // Changed from data.disk to data.diskIO
-                const diskIoData = data.diskIO; // Use alias
-                if (diskIoData.main_disk) {
-                    document.getElementById('disk-info').textContent = diskIoData.main_disk;
-                }
+            if (data.diskIO) {
+                let firstDevice = Object.keys(data.diskIO)[0];
+                let totalRead = 0;
+                let totalWrite = 0;
                 
-                if (diskIoData.total_bytes_read !== undefined && diskIoData.total_bytes_written !== undefined) {
-                    document.getElementById('disk-read').textContent = formatBytes(diskIoData.total_bytes_read);
-                    document.getElementById('disk-write').textContent = formatBytes(diskIoData.total_bytes_written);
+                Object.keys(data.diskIO).forEach(device => {
+                    const deviceStats = data.diskIO[device];
+                    if (deviceStats.io_service_bytes_recursive_read) {
+                        totalRead += deviceStats.io_service_bytes_recursive_read;
+                    } else if (deviceStats.sectors_read) {
+                        totalRead += deviceStats.sectors_read * 512;
+                    }
                     
-                    // Calculate rates
+                    if (deviceStats.io_service_bytes_recursive_write) {
+                        totalWrite += deviceStats.io_service_bytes_recursive_write;
+                    } else if (deviceStats.sectors_written) {
+                        totalWrite += deviceStats.sectors_written * 512;
+                    }
+                });
+                
+                document.getElementById('disk-info').textContent = firstDevice || 'Disk I/O';
+                document.getElementById('disk-read').textContent = formatBytes(totalRead);
+                document.getElementById('disk-write').textContent = formatBytes(totalWrite);
+                
+                if (previousMetrics?.diskIO) {
                     let readRate = 0;
                     let writeRate = 0;
                     
-                    // Check previousMetrics exists and has the diskIO data
-                    if (lastDiskRead > 0 && lastTimestamp && previousMetrics?.diskIO?.total_bytes_read !== undefined) {
-                        readRate = (diskIoData.total_bytes_read - previousMetrics.diskIO.total_bytes_read) / timeDiff / 1024 / 1024; // MB/s
+                    if (lastDiskRead > 0 && totalRead >= lastDiskRead) {
+                        readRate = (totalRead - lastDiskRead) / timeDiff / 1024 / 1024;
                     }
                     
-                    if (lastDiskWrite > 0 && lastTimestamp && previousMetrics?.diskIO?.total_bytes_written !== undefined) {
-                        writeRate = (diskIoData.total_bytes_written - previousMetrics.diskIO.total_bytes_written) / timeDiff / 1024 / 1024; // MB/s
+                    if (lastDiskWrite > 0 && totalWrite >= lastDiskWrite) {
+                        writeRate = (totalWrite - lastDiskWrite) / timeDiff / 1024 / 1024;
                     }
                     
-                    // Only update if values changed and rates are non-negative
                     if (readRate >= 0 && writeRate >= 0) {
                         diskHistory.data.datasets[0].data.push(readRate);
                         diskHistory.data.datasets[0].data.shift();
@@ -647,79 +675,86 @@
                         diskHistory.data.datasets[1].data.shift();
                         diskHistory.update();
                     }
-                    
-                    // Update last values for next calculation - ensure these are updated correctly
-                    lastDiskRead = diskIoData.total_bytes_read;
-                    lastDiskWrite = diskIoData.total_bytes_written;
                 }
+                
+                lastDiskRead = totalRead;
+                lastDiskWrite = totalWrite;
             } else {
-                // Handle case where diskIO data is missing
                 document.getElementById('disk-info').textContent = 'N/A';
                 document.getElementById('disk-read').textContent = 'N/A';
                 document.getElementById('disk-write').textContent = 'N/A';
             }
 
-            // Update Disk Usage information (NEW)
+            // Update Disk Usage information
             if (data.diskUsage) {
-                const usageData = data.diskUsage;
-                const usagePercent = usageData.usage_percent || 0;
-
-                document.getElementById('disk-usage-path').textContent = usageData.path || '/';
-                document.getElementById('disk-usage-percent').textContent = `${usagePercent.toFixed(1)}%`;
-                document.getElementById('disk-usage-total').textContent = formatBytes(usageData.total_bytes || 0);
-                document.getElementById('disk-usage-used').textContent = formatBytes(usageData.used_bytes || 0);
-                document.getElementById('disk-usage-free').textContent = formatBytes(usageData.free_bytes || 0);
-
-                // Update Disk Usage gauge
-                diskUsageGauge.data.datasets[0].data = [usagePercent, 100 - usagePercent];
-                diskUsageGauge.update();
-
+                const mountPoint = Object.keys(data.diskUsage)[0] || '/';
+                const usageData = data.diskUsage[mountPoint];
+                
+                if (usageData && typeof usageData === 'object' && !usageData.error) {
+                    const usagePercent = usageData.usagePercent !== undefined ? usageData.usagePercent : 0;
+                    
+                    document.getElementById('disk-usage-path').textContent = mountPoint;
+                    document.getElementById('disk-usage-percent').textContent = `${usagePercent.toFixed(1)}%`;
+                    document.getElementById('disk-usage-total').textContent = formatBytes(usageData.size || 0);
+                    document.getElementById('disk-usage-used').textContent = formatBytes(usageData.used || 0);
+                    document.getElementById('disk-usage-free').textContent = formatBytes(usageData.free || 0);
+                    
+                    // Update Disk Usage gauge
+                    diskUsageGauge.data.datasets[0].data = [usagePercent, 100 - usagePercent];
+                    diskUsageGauge.update();
+                }
             } else {
-                 // Handle case where diskUsage data is missing
-                 document.getElementById('disk-usage-path').textContent = 'N/A';
-                 document.getElementById('disk-usage-percent').textContent = 'N/A';
-                 document.getElementById('disk-usage-total').textContent = 'N/A';
-                 document.getElementById('disk-usage-used').textContent = 'N/A';
-                 document.getElementById('disk-usage-free').textContent = 'N/A';
-                 // Optionally reset gauge
-                 diskUsageGauge.data.datasets[0].data = [0, 100];
-                 diskUsageGauge.update();
+                document.getElementById('disk-usage-path').textContent = 'N/A';
+                document.getElementById('disk-usage-percent').textContent = 'N/A';
+                document.getElementById('disk-usage-total').textContent = 'N/A';
+                document.getElementById('disk-usage-used').textContent = 'N/A';
+                document.getElementById('disk-usage-free').textContent = 'N/A';
+                // Reset gauge
+                diskUsageGauge.data.datasets[0].data = [0, 100];
+                diskUsageGauge.update();
             }
             
             // Update Network information
             if (data.network) {
-                if (data.network.main_interface) {
-                    document.getElementById('network-info').textContent = data.network.main_interface;
+                let totalRx = 0;
+                let totalTx = 0;
+                let firstInterface = '';
+                
+                Object.keys(data.network).forEach(interfaceName => {
+                    const netStats = data.network[interfaceName];
+                    if (typeof netStats === 'object' && !netStats.error) {
+                        if (!firstInterface) firstInterface = interfaceName;
+                        
+                        if (netStats.rx_bytes !== undefined) totalRx += netStats.rx_bytes;
+                        if (netStats.tx_bytes !== undefined) totalTx += netStats.tx_bytes;
+                    }
+                });
+                
+                document.getElementById('network-info').textContent = firstInterface || 'Network';
+                document.getElementById('network-rx').textContent = formatBytes(totalRx);
+                document.getElementById('network-tx').textContent = formatBytes(totalTx);
+                
+                let rxRate = 0;
+                let txRate = 0;
+                
+                if (lastNetworkRx > 0 && totalRx >= lastNetworkRx) {
+                    rxRate = (totalRx - lastNetworkRx) / timeDiff / 1024;
                 }
                 
-                if (data.network.total_rx_bytes !== undefined && data.network.total_tx_bytes !== undefined) {
-                    document.getElementById('network-rx').textContent = formatBytes(data.network.total_rx_bytes);
-                    document.getElementById('network-tx').textContent = formatBytes(data.network.total_tx_bytes);
-                    
-                    // Calculate rates
-                    let rxRate = 0;
-                    let txRate = 0;
-                    
-                    if (lastNetworkRx > 0) {
-                        rxRate = (data.network.total_rx_bytes - lastNetworkRx) / timeDiff / 1024; // KB/s
-                    }
-                    
-                    if (lastNetworkTx > 0) {
-                        txRate = (data.network.total_tx_bytes - lastNetworkTx) / timeDiff / 1024; // KB/s
-                    }
-                    
-                    // Only update if values changed
-                    if (rxRate >= 0 && txRate >= 0) {
-                        networkHistory.data.datasets[0].data.push(rxRate);
-                        networkHistory.data.datasets[0].data.shift();
-                        networkHistory.data.datasets[1].data.push(txRate);
-                        networkHistory.data.datasets[1].data.shift();
-                        networkHistory.update();
-                    }
-                    
-                    lastNetworkRx = data.network.total_rx_bytes;
-                    lastNetworkTx = data.network.total_tx_bytes;
+                if (lastNetworkTx > 0 && totalTx >= lastNetworkTx) {
+                    txRate = (totalTx - lastNetworkTx) / timeDiff / 1024;
                 }
+                
+                if (rxRate >= 0 && txRate >= 0) {
+                    networkHistory.data.datasets[0].data.push(rxRate);
+                    networkHistory.data.datasets[0].data.shift();
+                    networkHistory.data.datasets[1].data.push(txRate);
+                    networkHistory.data.datasets[1].data.shift();
+                    networkHistory.update();
+                }
+                
+                lastNetworkRx = totalRx;
+                lastNetworkTx = totalTx;
             }
 
             // Store the entire data object for rate calculation reference
