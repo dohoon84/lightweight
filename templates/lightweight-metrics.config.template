@@ -14,16 +14,16 @@
 # InfluxDB v2로 데이터 전송 설정
 [[outputs.influxdb_v2]]
   ## InfluxDB 서버 URL (필수)
-  urls = ["http://your-central-influxdb-server.com:8086"] # 실제 서버 주소로 변경
+  urls = ["http://172.31.2.43:8086"] # 실제 서버 주소로 변경
 
   ## 인증 토큰 (필수)
-  token = "YOUR_INFLUXDB_API_TOKEN" # 실제 토큰으로 변경
+  token = "blocko1234" # 실제 토큰으로 변경
 
   ## 대상 Organization (필수)
-  organization = "your-organization-name" # 실제 조직 이름으로 변경
+  organization = "blocko" # 실제 조직 이름으로 변경
 
   ## 대상 Bucket (필수)
-  bucket = "your-bucket-name" # 실제 버킷 이름으로 변경
+  bucket = "host-metrics" # 실제 버킷 이름으로 변경
 
   ## (선택) 연결 타임아웃 등 추가 옵션
   # timeout = "5s"
