@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-pkg
+.build-tmp
+.env
+.git
+.gitignore
+.prettierrc
+.prettierignore
