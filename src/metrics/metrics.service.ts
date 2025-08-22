@@ -65,6 +65,11 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
   private hostname: string; // 호스트 이름 저장 변수
   private latestRawMetrics: any | null = null; // 최신 원시 메트릭 저장 변수 추가
 
+  // 이전 CPU 스냅샷 저장(호스트 /proc/stat 기반)
+  private prevHostCpuStats: {
+    user: number; nice: number; system: number; idle: number; iowait: number; irq: number; softirq: number; steal: number; total: number;
+  } | null = null;
+
   // 스케줄러 인터벌 핸들 저장
   private collectIntervalRef: NodeJS.Timeout | null = null;
   private flushIntervalRef: NodeJS.Timeout | null = null;
@@ -474,6 +479,8 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
 
       try {
           const metrics = await this.getMetrics(); // 기존 메트릭 수집 함수 호출
+          // CPU 사용률(%) 계산: /proc/stat 누적값에서 delta 기반으로 산출
+          this.computeCpuUsagePercent(metrics);
           this.latestRawMetrics = metrics; // 수집된 원시 메트릭 저장
 
           // 메트릭 객체를 InfluxDB Point 객체로 변환
@@ -551,7 +558,7 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
             if (metrics.cpu.softirq !== undefined) cpuPoint.intField('softirq', metrics.cpu.softirq);
             if (metrics.cpu.steal !== undefined) cpuPoint.intField('steal', metrics.cpu.steal);
             if (metrics.cpu.total !== undefined) cpuPoint.intField('total', metrics.cpu.total); // 집계된 total 값 추가
-            
+            if (metrics.cpu.idle_percent !== undefined) cpuPoint.floatField('idle_percent', metrics.cpu.idle_percent);
             // 사용률은 기본값 0
             cpuPoint.floatField('usage_percent', metrics.cpu.usage_percent ?? 0);
             
@@ -1259,4 +1266,54 @@ export class MetricsService implements OnModuleInit, OnModuleDestroy {
     return this.latestRawMetrics;
   }
 
+  // /proc/stat 누적값을 이용해 delta 기반 CPU 사용률을 계산하여 metrics.cpu.usage_percent/idle_percent를 채운다
+  private computeCpuUsagePercent(metrics: any): void {
+    try {
+      if (!metrics || !metrics.cpu || metrics.cpu.error) return;
+
+      // 호스트 모드에서 /proc/stat 기반일 때만 처리
+      const isHostProcStat = this.metricsTarget === 'host' && typeof metrics.cpu.source === 'string' && metrics.cpu.source.includes('/proc/stat');
+      if (!isHostProcStat) return;
+
+      const cur = metrics.cpu;
+      // 필수 누적 필드가 모두 존재하는지 확인
+      const required = ['user', 'nice', 'system', 'idle', 'iowait', 'irq', 'softirq', 'steal', 'total'];
+      for (const k of required) {
+        if (typeof cur[k] !== 'number') return; // 누락 시 계산 생략
+      }
+
+      if (this.prevHostCpuStats) {
+        const prev = this.prevHostCpuStats;
+        const deltaTotal = cur.total - prev.total;
+        const deltaIdle  = cur.idle  - prev.idle;
+
+        if (deltaTotal > 0 && deltaIdle >= 0) {
+          const usage = ((deltaTotal - deltaIdle) / deltaTotal) * 100;
+          const idlePct = (deltaIdle / deltaTotal) * 100;
+          // 소수점 안정화를 위해 범위 클램프
+          metrics.cpu.usage_percent = Math.max(0, Math.min(100, usage));
+          metrics.cpu.idle_percent = Math.max(0, Math.min(100, idlePct));
+        } else {
+          // 비정상 delta면 0으로
+          metrics.cpu.usage_percent = 0;
+          metrics.cpu.idle_percent = undefined;
+        }
+      }
+
+      // 현재 값을 다음 계산을 위해 저장 (항상 업데이트)
+      this.prevHostCpuStats = {
+        user: cur.user,
+        nice: cur.nice,
+        system: cur.system,
+        idle: cur.idle,
+        iowait: cur.iowait,
+        irq: cur.irq,
+        softirq: cur.softirq,
+        steal: cur.steal,
+        total: cur.total,
+      };
+    } catch (e) {
+      this.logger.warn(`computeCpuUsagePercent() failed: ${(e as Error).message}`);
+    }
+  }
 } // End of MetricsService class
